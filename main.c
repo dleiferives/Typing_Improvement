@@ -13,7 +13,8 @@ void handleBackspace(int *current_pos, const char *test_string);
 void handleCtrlBackspace(int *current_pos, const char *test_string);
 void logTimingData(const char *filename, char key, long time_diff);
 void processCharacter(int *current_pos, char ch, const char *test_string);
-void runTypingTest(const char *test_string, const char *filename);
+int runTypingTest(const char *test_string, const char *filename, int word_count);
+void calculateWPM(struct timeval start, struct timeval end, int word_count);
 
 void initializeScreen() {
     initscr();
@@ -70,10 +71,18 @@ void processCharacter(int *current_pos, char ch, const char *test_string) {
     refresh();
 }
 
-void runTypingTest(const char *test_string, const char *filename) {
+void calculateWPM(struct timeval start, struct timeval end, int word_count) {
+    long elapsed_time = ((end.tv_sec - start.tv_sec) * 1000000) + (end.tv_usec - start.tv_usec);
+    double elapsed_minutes = elapsed_time / 60000000.0;
+    double wpm = word_count / elapsed_minutes;
+    mvprintw(2, 0, "Words Per Minute: %.2f", wpm);
+    refresh();
+}
+
+int runTypingTest(const char *test_string, const char *filename, int word_count) {
     initializeScreen();
 
-    struct timeval start, end;
+    struct timeval wpm_start, start, end;
     int input_len = strlen(test_string);
     int current_pos = 0;
 
@@ -82,6 +91,7 @@ void runTypingTest(const char *test_string, const char *filename) {
     refresh();
 
     gettimeofday(&start, NULL); // Start timing
+    gettimeofday(&wpm_start, NULL); // Start timing
 
     while (1) {
         char ch = getch();
@@ -90,8 +100,9 @@ void runTypingTest(const char *test_string, const char *filename) {
             handleBackspace(&current_pos, test_string);
         } else if (ch == 23) { // Handle Ctrl + Backspace
             handleCtrlBackspace(&current_pos, test_string);
-        } else if (ch == ' ' || ch == '\n') { // Handle space or Enter
-            if (ch == '\n' || current_pos == input_len) break;
+        } else if (ch == '\n') { // Handle Enter
+            if (current_pos == input_len) break;
+        } else if (ch == ' ') {
             if (test_string[current_pos] == ' ') {
                 processCharacter(&current_pos, ch, test_string);
             } else {
@@ -108,12 +119,15 @@ void runTypingTest(const char *test_string, const char *filename) {
         gettimeofday(&start, NULL); // Reset start for next character
     }
 
-    finalizeScreen();
+    gettimeofday(&end, NULL); // End timing for entire test
+    calculateWPM(wpm_start, end, word_count);
+
+    return getch(); // Wait for user to see the result
+
 }
 
 int main() {
     const char *filename = "timing_data.csv";
-    const char *test_string = "hello world test";
 
     FILE *file = fopen(filename, "w");
     if (file) {
@@ -121,7 +135,18 @@ int main() {
         fclose(file);
     }
 
-    runTypingTest(test_string, filename);
+    while (1) {
+        const char *test_string = "hello world test";
+        int word_count = 3;
+        int result = runTypingTest(test_string, filename, word_count);
+
+        printf("Press Enter to start a new string or any other key to exit.\n");
+        if (result != '\n') {
+
+			finalizeScreen();
+            break;
+        }
+    }
 
     printf("Exiting program.\n");
     return 0;

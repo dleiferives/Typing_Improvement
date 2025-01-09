@@ -43,30 +43,32 @@ void runTypingTest(const char *test_string, const char *filename) {
         if (ch == 127 || ch == 8) { // Handle backspace
             if (current_pos > 0) {
                 current_pos--;
-                mvprintw(1, current_pos, " "); // Clear last character
+                mvprintw(0, current_pos, "%c", test_string[current_pos]); // Reset color to default
                 refresh();
             }
         } else if (ch == 23) { // Handle Ctrl + Backspace (clear current word)
             while (current_pos > 0 && input[current_pos - 1] != ' ') {
                 current_pos--;
-                mvprintw(1, current_pos, " ");
+                mvprintw(0, current_pos, "%c", test_string[current_pos]);
             }
             refresh();
         } else if (ch == ' ' || ch == '\n') { // Handle space or Enter
             if (ch == '\n' || current_pos == input_len) break; // End test
 
-            input[current_pos++] = ch;
-            mvprintw(1, current_pos - 1, "%c", ch);
-            refresh();
+            if (test_string[current_pos] == ' ') {
+                current_pos++;
+                continue;
+            }
         } else if (current_pos < input_len) { // Normal character input
-            input[current_pos++] = ch;
-            if (ch == test_string[current_pos - 1]) {
+            input[current_pos] = ch;
+            if (ch == test_string[current_pos]) {
                 attron(COLOR_PAIR(1)); // Correct letters in green
             } else {
                 attron(COLOR_PAIR(2)); // Incorrect letters in red
             }
-            mvprintw(1, current_pos - 1, "%c", ch);
+            mvprintw(0, current_pos, "%c", test_string[current_pos]);
             attroff(COLOR_PAIR(1) | COLOR_PAIR(2));
+            current_pos++;
             refresh();
         }
 
@@ -76,17 +78,6 @@ void runTypingTest(const char *test_string, const char *filename) {
 
         gettimeofday(&start, NULL); // Reset start for next character
     }
-
-    input[current_pos] = '\0'; // Null-terminate input
-
-    clear();
-    if (strcmp(input, test_string) == 0) {
-        mvprintw(0, 0, "Correct!\n");
-    } else {
-        mvprintw(0, 0, "Incorrect. Expected: %s\nYou typed: %s\n", test_string, input);
-    }
-    refresh();
-    getch();
 
     endwin();
 }

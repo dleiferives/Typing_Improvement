@@ -6,7 +6,48 @@
 
 #define MAX_INPUT_LEN 500
 
-// Log timing data to a CSV file
+void initializeScreen();
+void finalizeScreen();
+void initializeColors();
+void handleBackspace(int *current_pos, const char *test_string);
+void handleCtrlBackspace(int *current_pos, const char *test_string);
+void logTimingData(const char *filename, char key, long time_diff);
+void processCharacter(int *current_pos, char ch, const char *test_string);
+void runTypingTest(const char *test_string, const char *filename);
+
+void initializeScreen() {
+    initscr();
+    noecho();
+    cbreak();
+    initializeColors();
+}
+
+void finalizeScreen() {
+    endwin();
+}
+
+void initializeColors() {
+    start_color();
+    init_pair(1, COLOR_GREEN, COLOR_BLACK); // Green for correct
+    init_pair(2, COLOR_RED, COLOR_BLACK);   // Red for incorrect
+}
+
+void handleBackspace(int *current_pos, const char *test_string) {
+    if (*current_pos > 0) {
+        (*current_pos)--;
+        mvprintw(0, *current_pos, "%c", test_string[*current_pos]); // Reset color to default
+        refresh();
+    }
+}
+
+void handleCtrlBackspace(int *current_pos, const char *test_string) {
+    while (*current_pos > 0 && test_string[*current_pos - 1] != ' ') {
+        (*current_pos)--;
+        mvprintw(0, *current_pos, "%c", test_string[*current_pos]);
+    }
+    refresh();
+}
+
 void logTimingData(const char *filename, char key, long time_diff) {
     FILE *file = fopen(filename, "a");
     if (file == NULL) {
@@ -17,18 +58,23 @@ void logTimingData(const char *filename, char key, long time_diff) {
     fclose(file);
 }
 
-// Run typing test
+void processCharacter(int *current_pos, char ch, const char *test_string) {
+    if (ch == test_string[*current_pos]) {
+        attron(COLOR_PAIR(1)); // Correct letters in green
+    } else {
+        attron(COLOR_PAIR(2)); // Incorrect letters in red
+    }
+    mvprintw(0, *current_pos, "%c", test_string[*current_pos]);
+    attroff(COLOR_PAIR(1) | COLOR_PAIR(2));
+    (*current_pos)++;
+    refresh();
+}
+
 void runTypingTest(const char *test_string, const char *filename) {
-    initscr();
-    noecho();
-    cbreak();
-    start_color();
-    init_pair(1, COLOR_GREEN, COLOR_BLACK); // Green for correct
-    init_pair(2, COLOR_RED, COLOR_BLACK);   // Red for incorrect
+    initializeScreen();
 
     struct timeval start, end;
     int input_len = strlen(test_string);
-    char input[MAX_INPUT_LEN] = {0};
     int current_pos = 0;
 
     clear();
@@ -41,35 +87,18 @@ void runTypingTest(const char *test_string, const char *filename) {
         char ch = getch();
 
         if (ch == 127 || ch == 8) { // Handle backspace
-            if (current_pos > 0) {
-                current_pos--;
-                mvprintw(0, current_pos, "%c", test_string[current_pos]); // Reset color to default
-                refresh();
-            }
-        } else if (ch == 23) { // Handle Ctrl + Backspace (clear current word)
-            while (current_pos > 0 && input[current_pos - 1] != ' ') {
-                current_pos--;
-                mvprintw(0, current_pos, "%c", test_string[current_pos]);
-            }
-            refresh();
+            handleBackspace(&current_pos, test_string);
+        } else if (ch == 23) { // Handle Ctrl + Backspace
+            handleCtrlBackspace(&current_pos, test_string);
         } else if (ch == ' ' || ch == '\n') { // Handle space or Enter
-            if (ch == '\n' || current_pos == input_len) break; // End test
-
+            if (ch == '\n' || current_pos == input_len) break;
             if (test_string[current_pos] == ' ') {
-                current_pos++;
-                continue;
+                processCharacter(&current_pos, ch, test_string);
+            } else {
+                processCharacter(&current_pos, ch, test_string); // Show incorrect space in red
             }
         } else if (current_pos < input_len) { // Normal character input
-            input[current_pos] = ch;
-            if (ch == test_string[current_pos]) {
-                attron(COLOR_PAIR(1)); // Correct letters in green
-            } else {
-                attron(COLOR_PAIR(2)); // Incorrect letters in red
-            }
-            mvprintw(0, current_pos, "%c", test_string[current_pos]);
-            attroff(COLOR_PAIR(1) | COLOR_PAIR(2));
-            current_pos++;
-            refresh();
+            processCharacter(&current_pos, ch, test_string);
         }
 
         gettimeofday(&end, NULL); // End timing for each key
@@ -79,7 +108,7 @@ void runTypingTest(const char *test_string, const char *filename) {
         gettimeofday(&start, NULL); // Reset start for next character
     }
 
-    endwin();
+    finalizeScreen();
 }
 
 int main() {

@@ -20,15 +20,21 @@ def find_weak_words(weakest_info, corpus_file="word_corpus.txt", default_size=20
     if os.path.isfile("wordlist.tmp"):
         os.remove("wordlist.tmp");
 
+    if os.path.isfile("wordcount.tmp"):
+        os.remove("wordcount.tmp");
+
     weakest_letter = weakest_info['weakest_letter']
     weakest_pairs = weakest_info['weakest_pairs']
 
     # Read the word corpus from the file and ensure uniqueness
     with open(corpus_file, "r") as file:
-        word_corpus = " ".join(list(set(file.read().splitlines()))).split()
+        word_corpus = (" ".join(list(set(file.read().splitlines())))).split()
 
     # Filter words containing the weakest letter
     filtered_words = [word for word in word_corpus if weakest_letter in word]
+
+    if len(filtered_words) == 0:
+        return False
 
     # Sort words by priority of weakest pairs
     prioritized_words = []
@@ -42,12 +48,17 @@ def find_weak_words(weakest_info, corpus_file="word_corpus.txt", default_size=20
     unique_words = list(dict.fromkeys(prioritized_words + remaining_words))[:50]
 
     # Randomly sample from the unique words to generate a string
-    sampled_words = random.sample(unique_words, min(default_size, len(unique_words)))
+    sampled_words = random.choices(unique_words, k=default_size)
     generated_string = " ".join(sampled_words)
 
     # Write the unique words to a file
     with open("wordlist.tmp", "w") as file:
-        file.write(generated_string)
+        file.write(generated_string);
+
+    with open("wordcount.tmp","w") as file:
+        file.write(str(default_size));
+
+    return True
 
 
 class PerformanceAnalyzer:
@@ -192,10 +203,14 @@ class PerformanceAnalyzer:
 
         self._save_history()
 
-    def identify_weak_points(self):
+    def identify_weak_points(self,count=0):
         # Find weakest letter based on weakness metric
-        weakest_letter = min(self.data["letters"].items(),
-                             key=lambda item: item[1].get("weakness", float("inf")))[0]
+        sorted_letters = sorted(
+            self.data["letters"].items(),
+            key=lambda item: item[1].get("weakness", float("inf"))
+        )
+
+        weakest_letter = sorted_letters[count][0] 
 
         # Find weakest pairs associated with weakest letter
         weakest_pairs = [pair for pair in self.data["pairs"] if weakest_letter in pair]
@@ -241,5 +256,7 @@ if __name__ == "__main__":
 
     print("Weakest Points:", weakest_points)
     print("Metrics Summary:", json.dumps(metrics_summary, indent=4))
-
-    find_weak_words(weakest_points)
+    counter = 1;
+    while not find_weak_words(weakest_points):
+        weakest_points = analyzer.identify_weak_points(counter)
+        counter = counter + 1

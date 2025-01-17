@@ -237,13 +237,15 @@ int main() {
 	char *test_string = "hello world test";
 	char buffer[BUFFER_SIZE];
 
-    while (1) {
         int word_count = 3;
+
+    while (1) {
         int result = runTypingTest(test_string, filename, word_count);
 	system("python3 main.py");
+	read_file_to_buffer("wordcount.tmp",buffer,BUFFER_SIZE);
+	word_count = atoi(buffer);
 	read_file_to_buffer("wordlist.tmp",buffer,BUFFER_SIZE);
 	test_string = (char *)&buffer[0];
-
 
         printf("Press Enter to start a new string or any other key to exit.\n");
         if (result == 'q') {

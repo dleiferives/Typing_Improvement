@@ -249,6 +249,8 @@ if __name__ == "__main__":
     analyzer = PerformanceAnalyzer()
     session_data = csv_to_session_data("timing_data.csv")
     target_string = "hello world test"
+    with open("ran_string.tmp", "r") as file:
+        target_string = file.read()
 
     analyzer.analyze_session(session_data, target_string)
     weakest_points = analyzer.identify_weak_points()

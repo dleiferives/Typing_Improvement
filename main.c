@@ -150,6 +150,76 @@ void calculateWPM(struct timeval start, struct timeval end, int word_count) {
     refresh();
 }
 
+
+void displayCenteredStringWithColorsAndCursor(const char *test_string, int current_pos, const char *input, int input_len) {
+    clear();
+    int screen_width = getmaxx(stdscr);
+    int screen_height = getmaxy(stdscr);
+    int max_width = (2 * screen_width) / 4;
+
+    int y = 0;
+    const char *current = test_string;
+    int input_index = 0;
+    int cursor_x = 0, cursor_y = 0; // Track cursor position
+
+    while (*current) {
+        char line[max_width + 1];
+        int len = 0;
+
+        while (*current && len < max_width) {
+            line[len++] = *current++;
+        }
+
+        if (len > 0 && *current) {
+            while (len > 0 && line[len - 1] != ' ') {
+                len--;
+                current--;
+            }
+        }
+
+        line[len] = '\0';
+
+        int x = (screen_width - len) / 2;
+        mvprintw(y, x, "%s", line);
+
+        // Apply colors and track cursor position
+        for (int i = 0; i < len; i++) {
+            if (input_index < current_pos) {
+                if (line[i] == input[input_index]) {
+                    attron(COLOR_PAIR(1)); // Green for correct
+                } else {
+                    attron(COLOR_PAIR(2)); // Red for incorrect
+                }
+                mvprintw(y, x + i, "%c", line[i]);
+                attroff(COLOR_PAIR(1) | COLOR_PAIR(2));
+            } else if (input_index == current_pos) {
+                cursor_x = x + i;
+                cursor_y = y;
+            }
+            input_index++;
+        }
+
+        if (current_pos == input_index) {
+            cursor_x = x + len;
+            cursor_y = y;
+        }
+
+        y++;
+        if (y >= screen_height) {
+            break; // Prevent overflowing the screen vertically
+        }
+    }
+
+    // Ensure cursor is positioned correctly
+    if (current_pos == input_index) {
+        cursor_x = getmaxx(stdscr) / 2;
+        cursor_y = y;
+    }
+
+    move(cursor_y, cursor_x); // Position the cursor
+    refresh();
+}
+
 int runTypingTest(const char *test_string, const char *filename, int word_count) {
     initializeScreen();
 
@@ -157,59 +227,60 @@ int runTypingTest(const char *test_string, const char *filename, int word_count)
     int input_len = strlen(test_string);
     int current_pos = 0;
 
-    clear();
-    mvprintw(0, 0, "%s", test_string); // Display test string
-    refresh();
+    char input[MAX_INPUT_LEN] = {0}; // Tracks user input
+    int input_index = 0;
 
-    gettimeofday(&start, NULL); // Start timing
-    gettimeofday(&wpm_start, NULL); // Start timing
+    gettimeofday(&start, NULL);
+    gettimeofday(&wpm_start, NULL);
 
     KeySequence_t *sequence = KeySequence_init();
 
     while (1) {
+        displayCenteredStringWithColorsAndCursor(test_string, current_pos, input, input_index);
+
         int ch = getch();
 
-        if (ch == 127 || ch == 8) { // Handle backspace
-            handleBackspace(&current_pos, test_string);
-        } else if (ch == 23) { // Handle Ctrl + Backspace
-            handleCtrlBackspace(&current_pos, test_string);
-        } else if (ch == ' ') {
-            if (test_string[current_pos] == ' ') {
-                processCharacter(&current_pos, ch, test_string);
-            } else {
-                processCharacter(&current_pos, ch, test_string); // Show incorrect space in red
+        if (ch == 127 || ch == 8) { // Backspace
+            if (current_pos > 0) {
+                current_pos--;
+                input_index--;
+                input[input_index] = '\0'; // Remove last character
             }
-        } else if (current_pos < input_len) { // Normal character input
-            processCharacter(&current_pos, ch, test_string);
-        } 
-	if (current_pos >= input_len) {
-
-		gettimeofday(&end, NULL); // End timing for each key
-		long time_diff = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
-		KeySequence_add(sequence,ch,time_diff);
-            break;
-            //int result = processCharacter(&current_pos, ch, test_string);
-            //if(!result) break;
+        } else if (ch == 23) { // Ctrl + Backspace
+            while (current_pos > 0 && test_string[current_pos - 1] != ' ') {
+                current_pos--;
+                input_index--;
+                input[input_index] = '\0';
+            }
+        } else if (ch == ' ' || (ch >= 32 && ch <= 126)) { // Normal input
+            if (current_pos < input_len) {
+                input[input_index++] = ch;
+                current_pos++;
+            }
         }
 
+        if (current_pos >= input_len) {
+            gettimeofday(&end, NULL);
+            long time_diff = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
+            KeySequence_add(sequence, ch, time_diff);
+            break;
+        }
 
-
-        gettimeofday(&end, NULL); // End timing for each key
+        gettimeofday(&end, NULL);
         long time_diff = (end.tv_sec - start.tv_sec) * 1000000 + (end.tv_usec - start.tv_usec);
-	KeySequence_add(sequence,ch,time_diff);
-
-        gettimeofday(&start, NULL); // Reset start for next character
+        KeySequence_add(sequence, ch, time_diff);
+        gettimeofday(&start, NULL);
     }
 
-    gettimeofday(&end, NULL); // End timing for entire test
+    gettimeofday(&end, NULL);
     calculateWPM(wpm_start, end, word_count);
     logTimingData(sequence, filename);
     KeySequence_free(sequence);
-    sequence = NULL;
 
-    return getch(); // Wait for user to see the result
-
+    return getch();
 }
+
+
 #define BUFFER_SIZE 256
 int read_file_to_buffer(const char* filename, char* buffer, size_t buffer_size) {
     FILE* file = fopen(filename, "r");
@@ -234,22 +305,23 @@ int main() {
         fprintf(file, "Key,Time (microseconds)\n");
         fclose(file);
     }
-	char *test_string = "hello world test";
-	char buffer[BUFFER_SIZE];
+
+    char *test_string = "hello world test";
+    char buffer[BUFFER_SIZE];
 
         int word_count = 3;
 
     while (1) {
         int result = runTypingTest(test_string, filename, word_count);
-	system("python3 main.py");
-	read_file_to_buffer("wordcount.tmp",buffer,BUFFER_SIZE);
-	word_count = atoi(buffer);
-	read_file_to_buffer("wordlist.tmp",buffer,BUFFER_SIZE);
-	test_string = (char *)&buffer[0];
+        system("python3 main.py");
+        read_file_to_buffer("wordcount.tmp",buffer,BUFFER_SIZE);
+        word_count = atoi(buffer);
+        read_file_to_buffer("wordlist.tmp",buffer,BUFFER_SIZE);
+        test_string = (char *)&buffer[0];
 
-        printf("Press Enter to start a new string or any other key to exit.\n");
+        //printf("Press Enter to start a new string or any other key to exit.\n");
         if (result == 'q') {
-		finalizeScreen();
+            finalizeScreen();
             break;
         }
     }
